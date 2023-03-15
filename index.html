@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Screen Recorder</title>
+</head>
+
+<body>
+    <h1 id="processing"></h1>
+    <div class="class">
+        <button id="start-button">Start Recording</button>
+        <button id="stop-button" disabled>Stop Recording</button>
+    </div>
+    <div class="class">
+        <video id="video-player" controls width="100%"></video>
+    </div>
+    <button id="download">Download</button>
+    <script>
+
+
+        const startButton = document.getElementById('start-button');
+        const stopButton = document.getElementById('stop-button');
+        const videoPlayer = document.getElementById('video-player');
+        const downloadBtn = document.querySelector('#download');
+        const processing = document.getElementById('processing');
+
+        downloadBtn.disabled = true;
+        let mediaRecorder = null;
+        let chunks = [];
+
+        let name = "";
+
+        startButton.addEventListener('click', () => {
+            mediaRecorder = null;
+            videoPlayer.src = "";
+            chunks = [];
+            ipcRenderer.send('start-recording');
+            name = `rox-cord-${new Date().getMilliseconds() + Math.random(1000)}`;
+            processing.innerHTML = "Rox-cord has started recording ..."
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            downloadBtn.disabled = true;
+        });
+        stopButton.addEventListener('click', () => {
+            processing.innerHTML = "Rox-cord has stopped recording ..."
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            mediaRecorder.stop()
+            chunks = [];
+        });
+        /*
+                ipcRenderer.on('recording-started', () => {
+                    console.log('Recording started');
+                });
+        
+                ipcRenderer.on('recording-stopped', (event, url) => {
+                    console.log('Recording stopped');
+                    videoPlayer.src = url;
+                }); */
+
+        function handleStream(stream) {
+            const video = document.querySelector('video')
+            video.srcObject = stream;
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'video/webm; codecs=vp9'
+            })
+
+            mediaRecorder.start();
+            mediaRecorder.ondataavailable = handleDataAvailable;
+
+            mediaRecorder.onstop = (e) => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                video.srcObject = null;
+                video.src = url;
+                downloadBtn.disabled = false;
+            }
+            video.onloadedmetadata = (e) => video.play()
+        }
+        function handleDataAvailable(e) {
+            if (e.data.size > 0) {
+                chunks.push(e.data)
+            }
+        }
+        function handleError(e) {
+            console.log(e)
+        }
+        ipcRenderer.on('SET_SOURCE', async (sourceId) => {
+            console.log(sourceId)
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        mandatory: {
+                            chromeMediaSource: 'desktop',
+                            chromeMediaSourceId: sourceId,
+                            minWidth: 1920,
+                            maxWidth: 1920,
+                            minHeight: 1080,
+                            maxHeight: 1080
+                        }
+                    }
+                })
+                const stream_ = await navigator.mediaDevices.getUserMedia({ 
+                    audio: true ,
+                    video: false,
+                    audio : {
+                        mandatory:{
+                            googleEchoCancellation: true,
+                            googleAutoGainControl: true,
+                            googleNoiseSuppression: true,
+                            googleHighpassFilter: true,
+                            googleTypingNoiseDetection: true,
+                            googleAudioMirroring: true
+                        }
+                    }
+                 })
+                stream.addTrack(stream_.getAudioTracks()[0])
+                handleStream(stream)
+
+            } catch (e) {
+                handleError(e)
+            }
+        })
+
+
+        downloadBtn.addEventListener('click', () => {
+            // disable all buttons
+            startButton.disabled = true;
+            stopButton.disabled = true;
+            downloadBtn.disabled = true;
+            // create blob
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            a.download = `${name}.webm`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            processing.innerHTML = "Please do not commit any action ..."
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+                ipcRenderer.send(
+                    'convert',
+                    name
+                );
+
+                processing.innerHTML = "Please wait , the video is being processed ..."
+                startButton.disabled = false;
+                downloadBtn.disabled = false;
+
+            }, 6000)
+        });
+
+
+    </script>
+
+</body>
+
+</html>

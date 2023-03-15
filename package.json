@@ -1,7 +1,7 @@
 {
   "name": "screen-recorder",
   "version": "1.0.0",
-  "description": "",
+  "description": "Rox-Cord is a desktop application built with Electron that allows you to record videos in 1080p quality.",
   "main": "main.js",
   "dependencies": {
     "boolean": "^3.2.0",
